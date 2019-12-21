@@ -11,10 +11,38 @@ import math
 from .models import GtmCheckDomain
 
 
-def setDomain(client, domains, value, id, rtype):
+def setDomain(client, domains, value, id, rtype, special_domain=None):
     task_id = list()
+    gtm_data = list()
+    special_list = list()
+    if special_domain is not None:
+        for limit in special_domain:
+            request = DescribeDomainRecordsRequest()
+            request.set_accept_format('json')
+            request.set_DomainName(limit)
+            response = client.do_action_with_exception(request)
+            json_data = json.loads(str(response, encoding='utf-8'))
+            RecordIdList_ = list()
+            for RecordId in json_data['DomainRecords']['Record']:
+                if RecordId['RR'] == 'api':
+                    RecordIdList_.append(RecordId['RecordId'])
+            special_list.append(RecordIdList_)
+            data = dict()
+            data['Domain'] = limit
+            data['Rr'] = 'api'
+            data['Value'] = value
+            data['Type'] = rtype
+            gtm_data.append(data)
+
+    if special_domain is not None:
+        for RecordIdList in special_list:
+            for RecordId in RecordIdList:
+                request = DeleteDomainRecordRequest()
+                request.set_accept_format('json')
+                request.set_RecordId(RecordId)
+                response = client.do_action_with_exception(request)
+
     for domain in domains:
-        gtm_data = list()
         RecordIdLists = list()
         for limit in domain:
             # 当前二级列表里的域名的解析id
@@ -53,17 +81,17 @@ def setDomain(client, domains, value, id, rtype):
 
 
 @shared_task
-def SwitchDomain(client, domains, value, id, rtype):
+def SwitchDomain(client, domains, value, id, rtype, special_domain):
     pool = Pool(processes=2)
     return_dict = list()
     jobs = list()
     step = math.ceil(len(domains) / 2)
     domains = [domains[i:i + step] for i in range(0, len(domains), step)]
     if len(domains) < 2:
-        r1 = pool.apply_async(setDomain, (client, domains[0], value, id, rtype))
+        r1 = pool.apply_async(setDomain, (client, domains[0], value, id, rtype, special_domain))
         jobs.append(r1)
     else:
-        r1 = pool.apply_async(setDomain, (client, domains[0], value, id, rtype))
+        r1 = pool.apply_async(setDomain, (client, domains[0], value, id, rtype, special_domain))
         r2 = pool.apply_async(setDomain, (client, domains[1], value, id, rtype))
         jobs.append(r1)
         jobs.append(r2)

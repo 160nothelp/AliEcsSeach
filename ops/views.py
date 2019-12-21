@@ -6,6 +6,7 @@ from aliyunsdkalidns.request.v20150109.DescribeDomainRecordsRequest import Descr
 import json
 from django.utils.decorators import method_decorator
 from dwebsocket.decorators import accept_websocket, require_websocket
+from datetime import datetime
 
 from .models import GtmCheckDomain
 from .tasks import SwitchDomain
@@ -22,6 +23,7 @@ class SwitchGtm(View):
         type = payload['type']
         domains_obj = GtmCheckDomain.objects.first()
         donamins = domains_obj.domain_list.strip().split()
+        special_domain = domains_obj.special_domain.strip().split()
         step = 20
         donamins = [donamins[i:i + step] for i in range(0, len(donamins), step)]
         domains_obj.task_id = None
@@ -29,10 +31,10 @@ class SwitchGtm(View):
         client = AcsClient(domains_obj.AccessKey_ID, domains_obj.Access_Key_Secret, domains_obj.region_id)
         if type == 'gtm':
             rtype = 'CNAME'
-            SwitchDomain.delay(client, donamins, domains_obj.gtm_cname, domains_obj.id, rtype)
+            SwitchDomain.delay(client, donamins, domains_obj.gtm_cname, domains_obj.id, rtype, special_domain)
         if type == 'default':
             rtype = 'A'
-            SwitchDomain.delay(client, donamins, domains_obj.default_line, domains_obj.id, rtype)
+            SwitchDomain.delay(client, donamins, domains_obj.default_line, domains_obj.id, rtype, special_domain)
 
         return JsonResponse({
             'status': 'complete'
@@ -62,14 +64,16 @@ class GetSwitchStatus(View):
                 if json_data['Status'] == 1:
                     result_ = '已完成'
                 if json_data['Status'] == 2:
-                    result_ = '已完成，有错误，错误数量：%s' % json_data.get('FailedCount')
+                    result_ = '已完成'
+                    result.append('有错误，错误数量：%s' % json_data.get('FailedCount'))
                 if json_data['Status'] == 0:
                     result_ = '执行中'
                 if json_data['Status'] == -1:
-                    result_ = '有域名不对'
+                    result_ = '已完成'
+                    result.append('有域名不属于阿里云的管控')
 
             result.append(result_)
-        index = [i for i, a in enumerate(result) if a == '执行中' or a == '有域名不对']
+        index = [i for i, a in enumerate(result) if a == '执行中']
         if len(index) == 0:
             status = 'all'
         else:
@@ -90,6 +94,7 @@ def CheckDomainLine(request):
         domains = domains_obj.domain_list.strip().split()
         total = len(domains)
         counter = 0
+        null = 0
         for domain in domains:
             client = AcsClient(domains_obj.AccessKey_ID, domains_obj.Access_Key_Secret, domains_obj.region_id)
             alirequest = DescribeDomainRecordsRequest()
@@ -99,13 +104,23 @@ def CheckDomainLine(request):
             json_data = json.loads(str(response, encoding='utf-8'))
             line = 'default'
             for RecordId in json_data['DomainRecords']['Record']:
-                is_true = isIpV4AddrLegal(RecordId['Value'])
-                if not is_true:
-                    line = 'gtm'
+                try:
+                    if RecordId['Value'] is not None:
+                        is_true = isIpV4AddrLegal(RecordId['Value'])
+                        if not is_true:
+                            line = 'gtm'
+                    else:
+                        line = 'null'
+                except Exception as e:
+                    line = 'null'
             if line == 'default':
                 counter += 1
-        other = total - counter
-        request.websocket.send(json.dumps({'total': total, 'counter': counter, 'other': other}))
+            if line == 'null':
+                null += 1
+        other = total - counter - null
+        now = datetime.now()
+        cday = now.strftime('%Y-%m-%d %H:%M:%S')
+        request.websocket.send(json.dumps({'total': total, 'counter': counter, 'other': other, 'time': cday, 'null': null}))
     # return JsonResponse({
     #     'total': total,
     #     'counter': counter

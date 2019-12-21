@@ -182,22 +182,25 @@ def searchOtherPrivateIp(other_user, ip, user_type):
 
 
 def searchSlbIp(aliuser, ip, user_type):
-    clientobj = AliClient(aliuser.AccessKey_ID, aliuser.Access_Key_Secret,
-                          aliuser.region_id)
-    client = clientobj.client()
-    alirequest = DescribeLoadBalancersRequest.DescribeLoadBalancersRequest()
-    alirequest.set_accept_format('json')
-    alirequest.set_PageSize(100)
-    alirequest.set_Address(ip)
-    response = client.do_action_with_exception(alirequest)
-    json_data = json.loads(str(response, encoding='utf-8'))
-    if len(json_data["LoadBalancers"]["LoadBalancer"]) == 0:
-        pass
-    else:
-        json_data['nickname'] = aliuser.nickname
-        json_data['user_type'] = user_type
-        json_data['slb'] = 1
-        return json_data
+    try:
+        clientobj = AliClient(aliuser.AccessKey_ID, aliuser.Access_Key_Secret,
+                              aliuser.region_id)
+        client = clientobj.client()
+        alirequest = DescribeLoadBalancersRequest.DescribeLoadBalancersRequest()
+        alirequest.set_accept_format('json')
+        alirequest.set_PageSize(100)
+        alirequest.set_Address(ip)
+        response = client.do_action_with_exception(alirequest)
+        json_data = json.loads(str(response, encoding='utf-8'))
+        if len(json_data["LoadBalancers"]["LoadBalancer"]) == 0:
+            pass
+        else:
+            json_data['nickname'] = aliuser.nickname
+            json_data['user_type'] = user_type
+            json_data['slb'] = 1
+            return json_data
+    except Exception as e:
+        print(e)
 
 
 @shared_task
@@ -243,4 +246,77 @@ def SearchHostIp(ip, id):
     taskobj.save()
     print('ok')
     return True
+
+
+def searchEcsInstancename(aliuser, instancename, user_type):
+    clientobj = AliClient(aliuser.AccessKey_ID, aliuser.Access_Key_Secret,
+                          aliuser.region_id)
+    client = clientobj.client()
+    alirequest = DescribeInstancesRequest.DescribeInstancesRequest()
+    alirequest.set_accept_format('json')
+    alirequest.set_PageSize(100)
+    alirequest.set_InstanceName('*%s*' % instancename)
+    response = client.do_action_with_exception(alirequest)
+    json_data = json.loads(str(response, encoding='utf-8'))
+    if len(json_data['Instances']['Instance']) == 0:
+        pass
+    else:
+        json_data['nickname'] = aliuser.nickname
+        json_data['user_type'] = user_type
+        return json_data
+
+
+def searchOtherInstancename(other_user, instancename, user_type):
+    query_data = other_user.hosts.filter(InstanceName__icontains=instancename)
+    if query_data:
+        json_data = serializers.serialize("json", query_data)
+        json_data = json.loads(json_data)
+        json_data_ = dict()
+        json_data_['table_data'] = json_data
+        json_data_['nickname'] = other_user.nickname
+        json_data_['user_type'] = user_type
+        return json_data_
+
+
+def searchSlbInstancename(aliuser, instancename, user_type):
+    pass
+
+
+@shared_task
+def SearchHostInstancename(instancename, id):
+    pool = Pool(processes=3)
+    return_dict = list()
+    users = list()
+    jobs = list()
+    aliuserobj = AliUserAccessKey.objects.all()
+    otheruserobj = OtherPlatforms.objects.all()
+    for aliuser in aliuserobj:
+        user = dict()
+        user['user'] = aliuser
+        user['user_type'] = 'aliuser'
+        users.append(user)
+    for other_user in otheruserobj:
+        user = dict()
+        user['user'] = other_user
+        user['user_type'] = 'other_user'
+        users.append(user)
+    for user in users:
+        if user['user_type'] == 'aliuser':
+            r1 = pool.apply_async(searchEcsInstancename, (user['user'], instancename, user['user_type']))
+            jobs.append(r1)
+        elif user['user_type'] == 'other_user':
+            r2 = pool.apply_async(searchOtherInstancename, (user['user'], instancename, user['user_type']))
+            jobs.append(r2)
+    pool.close()
+    pool.join()
+    for job in jobs:
+        return_dict.append(job.get())
+    taskobj = HostIpSearchTask.objects.get(pk=id)
+    taskobj.result = return_dict
+    taskobj.status = 2
+    taskobj.save()
+    print('ok')
+    return True
+
+
 

@@ -72,10 +72,17 @@ class OtherPlatformsHosts(models.Model):
 
 class HostIpSearchTask(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
-    user_type = models.CharField(max_length=64)
-    allip = models.GenericIPAddressField()
-    result = models.TextField()
+    user_type = models.CharField(max_length=64, null=True, blank=True)
+    allip = models.GenericIPAddressField(null=True, blank=True)
+    allname = models.CharField(max_length=64, null=True, blank=True)
+    result = models.TextField(null=True)
     status = models.SmallIntegerField()
     p_time = models.DateTimeField(auto_now=True)
     c_time = models.DateTimeField(auto_now_add=True)
+
+
+class InstanceNameResult(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True)
+    task = models.ForeignKey('HostIpSearchTask', related_name='results', on_delete=models.CASCADE)
+
 

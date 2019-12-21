@@ -1,5 +1,4 @@
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.views import View
 from aliyunsdkecs.request.v20140526 import DescribeInstancesRequest, DescribeInstanceAutoRenewAttributeRequest, \
     DescribeInstanceMonitorDataRequest
@@ -13,9 +12,16 @@ from dwebsocket.decorators import accept_websocket, require_websocket
 from django.core.paginator import Paginator
 from django.core import serializers
 
+from rest_framework import mixins
+from rest_framework import viewsets
+from rest_framework import status
+from rest_framework.response import Response
+
+from .serializers import PostTaskSerializer, GetTaskSerializer
+
 from .models import AliUserAccessKey, OtherPlatforms, HostIpSearchTask
 from .utils import AliClient, ECSList, ECSDetails, isIpV4AddrLegal, SlbList
-from .tasks import SearchHostIp
+from .tasks import SearchHostIp, SearchHostInstancename
 from user.api_session import authenticate
 from user.user_permission import HostsPermission
 
@@ -95,17 +101,21 @@ class EcsHostTableView(View):
         if cache.get(key) is not None:
             json_data = cache.get(key)
         else:
-            ecsdata = AliUserAccessKey.objects.get(nickname=user)
-            clientobj = AliClient(ecsdata.AccessKey_ID, ecsdata.Access_Key_Secret,
-                                  ecsdata.region_id)
-            client = clientobj.client()
+            try:
+                ecsdata = AliUserAccessKey.objects.get(nickname=user)
+                clientobj = AliClient(ecsdata.AccessKey_ID, ecsdata.Access_Key_Secret,
+                                      ecsdata.region_id)
+                client = clientobj.client()
 
-            alirequest = DescribeInstancesRequest.DescribeInstancesRequest()
-            alirequest.set_accept_format('json')
-            alirequest.set_PageNumber(page_num)
-            alirequest.set_PageSize(page_size)
-            response = client.do_action_with_exception(alirequest)
-            json_data = json.loads(str(response, encoding='utf-8'))
+                alirequest = DescribeInstancesRequest.DescribeInstancesRequest()
+                alirequest.set_accept_format('json')
+                alirequest.set_PageNumber(page_num)
+                alirequest.set_PageSize(page_size)
+                response = client.do_action_with_exception(alirequest)
+                json_data = json.loads(str(response, encoding='utf-8'))
+            except Exception as e:
+                print(e)
+                return HttpResponse(status=404)
         ecslistobj = ECSList(json_data, user)
         index_data_ = ecslistobj.IndexList()
 
@@ -159,6 +169,13 @@ class HostIpSearchView(View):
                     return JsonResponse({
                         'status': 'pass'
                     })
+            elif payload['category'] == 'AllName':
+                instancename = payload['sdata'].strip()
+                searchobj = HostIpSearchTask(instancename=instancename, status=1, result='')
+                searchobj.save()
+                return JsonResponse({
+                    '1': 1
+                })
         else:
             return JsonResponse({
                 'status': 'pass'
@@ -212,16 +229,20 @@ class SlbListView(View):
         if cache.get(key) is not None:
             json_data = cache.get(key)
         else:
-            userdata = AliUserAccessKey.objects.get(nickname=user)
-            clientobj = AliClient(userdata.AccessKey_ID, userdata.Access_Key_Secret,
-                                  userdata.region_id)
-            client = clientobj.client()
-            alirequest = DescribeLoadBalancersRequest.DescribeLoadBalancersRequest()
-            alirequest.set_accept_format('json')
-            alirequest.set_PageSize(page_size)
-            alirequest.set_PageNumber(page_num)
-            response = client.do_action_with_exception(alirequest)
-            json_data = json.loads(str(response, encoding='utf-8'))
+            try:
+                userdata = AliUserAccessKey.objects.get(nickname=user)
+                clientobj = AliClient(userdata.AccessKey_ID, userdata.Access_Key_Secret,
+                                      userdata.region_id)
+                client = clientobj.client()
+                alirequest = DescribeLoadBalancersRequest.DescribeLoadBalancersRequest()
+                alirequest.set_accept_format('json')
+                alirequest.set_PageSize(page_size)
+                alirequest.set_PageNumber(page_num)
+                response = client.do_action_with_exception(alirequest)
+                json_data = json.loads(str(response, encoding='utf-8'))
+            except Exception as e:
+                print(e)
+                return HttpResponse(status=404)
         slbobj = SlbList(json_data)
         slb_json = slbobj.indexlist()
         return JsonResponse({
@@ -266,4 +287,61 @@ class AliEcsDetailsView(View):
         return JsonResponse({
             'ecsdetails': ecsdetails
         })
+
+
+class AliSearchView(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    serializer_class = PostTaskSerializer
+    queryset = HostIpSearchTask.objects.all()
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        if request.data['category'] == 'AllIP':
+            SearchHostIp.delay(request.data['sdata'], serializer.data['id'])
+        elif request.data['category'] == 'AllName':
+            SearchHostInstancename.delay(request.data['allname'], serializer.data['id'])
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
+class AliSearchGetStatusView(mixins.ListModelMixin, viewsets.GenericViewSet, mixins.RetrieveModelMixin):
+    serializer_class = GetTaskSerializer
+    queryset = HostIpSearchTask.objects.all()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        try:
+            results = eval(serializer.data['result'])
+        except Exception as e:
+            print(e)
+            return Response({
+                'wait': 1
+            })
+        all_data = list()
+        index_data = list()
+        for result in results:
+            if result is not None:
+                if result['user_type'] == 'aliuser':
+                    if result.get('slb'):
+                        slbobj = SlbList(result)
+                        slb_json = slbobj.indexlist()
+                        slb_json['user_type'] = 'aliuser'
+                        slb_json['slb'] = 1
+                        all_data.append(slb_json)
+                    else:
+                        ecslistobj = ECSList(result, result['nickname'])
+                        index_data_ = ecslistobj.IndexList()
+                        for data in index_data_['index_data']:
+                            index_data.append(data)
+                        all_data.append({'PageNumber': 1, 'totalPages': 1, 'index_data': index_data, 'pagesize_off': True
+                                         , 'user_type': 'aliuser'})
+                if result['user_type'] == 'other_user':
+                    all_data.append(result)
+        return Response({
+            'search_data': all_data,
+            'status': serializer.data['status']
+        })
+
 

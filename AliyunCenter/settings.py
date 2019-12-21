@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'user',
     'ops',
-    'gunicorn'
+    'gunicorn',
+    'django_filters',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -52,7 +54,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'AliyunCenter.middleware.SetRemoteAddrFromForwardedFor'
+    'AliyunCenter.middleware.SetRemoteAddrFromForwardedFor',
+    'AliyunCenter.middleware.DisableCSRFCheck',
 ]
 
 ROOT_URLCONF = 'AliyunCenter.urls'
@@ -142,11 +145,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/2.2/howto/static-files/
 
-# STATIC_ROOT = '/opt/static/'
-STATIC_URL = '/static/'
-# STATICFILES_DIRS = (
-#     os.path.join(os.path.join(BASE_DIR, 'static')),
-# )
+STATIC_ROOT = '/opt/static/pstatic/'
+STATIC_URL = '/pstatic/'
+
+STATICFILES_DIRS = (
+    os.path.join(os.path.join(BASE_DIR, 'static')),
+)
 
 # Celery
 CELERY_BROKER_URL = 'redis://:%(password)s@%(host)s:%(port)s/%(db)s' % {
@@ -169,3 +173,27 @@ CELERY_FORCE_EXECV = True
 
 # 修改默认用户表
 AUTH_USER_MODEL = 'user.User'
+
+
+# drf认证
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.BasicAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework_jwt.authentication.JSONWebTokenAuthentication',
+    )
+}
+
+
+import datetime
+JWT_AUTH = {
+    'JWT_EXPIRATION_DELTA': datetime.timedelta(hours=2),
+    'JWT_AUTH_HEADER_PREFIX': 'JWT',
+}
+
+
+# 用户验证重写
+AUTHENTICATION_BACKENDS = (
+    'user.views.CustomBackend',
+)
+

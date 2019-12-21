@@ -108,8 +108,10 @@ class ECSDetails(object):
         ecs['InstanceTypeFamily'] = ecs_data['InstanceTypeFamily']
         ecs['ImageId'] = ecs_data['ImageId']
         ecs['KeyPairName'] = ecs_data.get('KeyPairName', '')
-        ecs['TagValue'] = ecs_data.get('Tags', {}).get('Tag', {}).get('TagValue', '')
-        ecs['TagKey'] = ecs_data.get('Tags', {}).get('Tag', {}).get('TagKey', '')
+        # ecs['TagValue'] = ecs_data.get('Tags', {}).get('Tag', {}).get('TagValue', '')
+        # ecs['TagValue'] = [x for x in ecs_data.get('Tags', {}).get('Tag', {})]
+        # ecs['TagKey'] = ecs_data.get('Tags', {}).get('Tag', {}).get('TagKey', '')
+        ecs['TagKey'] = [x for x in ecs_data.get('Tags', {}).get('Tag', {})]
         ecs['OSNameEn'] = ecs_data['OSNameEn']
         ecs['NetworkInterfaceId'] = ecs_data['NetworkInterfaces']['NetworkInterface'][0]['NetworkInterfaceId']
         ecs['InternetChargeType'] = ecs_data['InternetChargeType']

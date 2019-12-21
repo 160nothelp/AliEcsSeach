@@ -7,11 +7,28 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 import json
+from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from user.api_session import gen_token
 from user.api_session import authenticate as authenticate_
 from .form import ChangepwdForm
 from .models import User
+
+
+User_ = get_user_model()
+
+
+# 自定义用户登录认证，配合drf_jwt
+class CustomBackend(ModelBackend):
+    def authenticate(self, request, username=None, password=None, **kwargs):
+        try:
+            user = User_.objects.get(username=username)
+            if user.check_password(password):
+                return user
+        except Exception as e:
+            return None
 
 
 class LogInView(View):
@@ -54,10 +71,10 @@ class ChangePasswdView(View):
         form = ChangepwdForm(request.POST)
         if form.is_valid():
             username = request.user.username
-            oldpassword = request.POST.get('oldpasswd', '')
+            oldpassword = request.POST.get('oldpasswd')
             user = authenticate(username=username, password=oldpassword)
             if user is not None and user.is_active:
-                newpassword = request.POST.get('newpasswd1', '')
+                newpassword = request.POST.get('newpasswd1')
                 user.set_password(newpassword)
                 user.save()
                 return JsonResponse({

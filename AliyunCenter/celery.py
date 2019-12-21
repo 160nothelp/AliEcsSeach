@@ -20,6 +20,7 @@ CELERY_QUEUES = (
 
 CELERY_ROUTES = {
     'aliecs.tasks.SearchHostIp': {"queue": "for_task_search", "routing_key": "for_task_search"},
+    'aliecs.tasks.SearchHostInstancename': {"queue": "for_task_search", "routing_key": "for_task_search"},
     'aliecs.tasks.SetEcsCache': {"queue": "for_task_setCache", "routing_key": "for_task_setCache"},
     'ops.tasks.SwitchDomain': {"queue": "for_task_search", "routing_key": "for_task_search"},
 }

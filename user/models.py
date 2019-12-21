@@ -7,5 +7,9 @@ class User(AbstractUser):
     hosts_permission = models.BooleanField(verbose_name='此用户是否允许访问主机相关', default=True)
     gtm_permission = models.BooleanField(verbose_name='此用户是否允许访问gtm切换', default=True)
 
-    class Meta(AbstractUser.Meta):
-        pass
+    class Meta:
+        verbose_name = "用户"
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return self.username
