@@ -64,7 +64,17 @@ class GtmCheckDomain(models.Model):
 #         verbose_name_plural = verbose_name
 
 
+class AliRamLink(models.Model):
+    id = models.UUIDField(default=uuid.uuid4, primary_key=True)
+    project_name = models.CharField(max_length=64, verbose_name='项目名称')
+    ali_link = models.TextField(verbose_name='项目阿里云地址')
+    add_time = models.DateTimeField(auto_now_add=True, verbose_name="添加时间")
 
+    def __str__(self):
+        return '%s' % self.project_name
 
+    class Meta:
+        verbose_name = '项目阿里云子账号地址'
+        verbose_name_plural = verbose_name
 
 

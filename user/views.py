@@ -1,19 +1,14 @@
-from django.shortcuts import render, redirect
-from django.http import HttpResponse, JsonResponse
-from django.views import View
 from django.contrib.auth import authenticate
-from django.contrib.auth import login as auth_login
-from django.contrib.auth import logout as auth_logout
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-import json
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from rest_framework import mixins
+from rest_framework import viewsets
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework import authentication
+from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 
-from user.api_session import gen_token
-from user.api_session import authenticate as authenticate_
-from .form import ChangepwdForm
+from .serializers import UserPermissionSerializer, UserChangePasswordSerializer
 from .models import User
 
 
@@ -31,71 +26,52 @@ class CustomBackend(ModelBackend):
             return None
 
 
-class LogInView(View):
+class IndexBaseView(mixins.ListModelMixin, viewsets.GenericViewSet):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
-    def post(self, request):
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        user = authenticate(username=username, password=password)
-        if user is not None:
-            if user.is_active:
-                auth_login(request, user)
-                return JsonResponse({
-                    'status': 'y',
-                    'token': gen_token(user.id)
-                })
-            else:
-                message = '账号未启用，请联系管理员'
-                return JsonResponse({
-                    'status': 'a'
-                })
-        else:
-            message = '登陆失败，账号或密码错误'
-            return JsonResponse({
-                'status': 'u'
-            })
-
-
-class LogOutView(View):
-    @method_decorator(authenticate_)
-    def get(self, request):
-        auth_logout(request)
-        return JsonResponse({
-            'logout': True,
-        })
-
-
-class ChangePasswdView(View):
-    @method_decorator(authenticate_)
-    def post(self, request):
-        form = ChangepwdForm(request.POST)
-        if form.is_valid():
-            username = request.user.username
-            oldpassword = request.POST.get('oldpasswd')
-            user = authenticate(username=username, password=oldpassword)
-            if user is not None and user.is_active:
-                newpassword = request.POST.get('newpasswd1')
-                user.set_password(newpassword)
-                user.save()
-                return JsonResponse({
-                    'Status': 'ok'
-                })
-            return JsonResponse({
-                'Status': 'erroroldpasswd'
-            })
-        return JsonResponse({
-            'Status': 'newpasswdnosame'
-        })
-
-
-class CheckLogin(View):
-    @method_decorator(authenticate_)
-    def get(self, request):
+    def list(self, request, *args, **kwargs):
         username = request.user.username
-        obj = User.objects.get(username=username)
-        return JsonResponse({
-            'gtm_permission': obj.gtm_permission,
-            'hosts_permission': obj.hosts_permission
+        return Response({
+            'username': username
+        })
+
+
+class ChangePasswordView(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    serializer_class = UserChangePasswordSerializer
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = authenticate(username=request.user.username, password=serializer.data.get("old_password"))
+            if user is not None:
+                user.set_password(serializer.data.get("new_password"))
+                user.save()
+                return Response("Success", status=status.HTTP_200_OK)
+            else:
+                return Response({'message': '原密码错误'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CheckLoginView(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = UserPermissionSerializer
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
+    def get_queryset(self):
+        return User.objects.filter(username=self.request.user.username)
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({
+            'gtm_permission': serializer.data[0]['gtm_permission'],
+            'hosts_permission': serializer.data[0]['hosts_permission']
         })
 
 

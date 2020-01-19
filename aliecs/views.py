@@ -1,28 +1,25 @@
-from django.http import JsonResponse, HttpResponse
-from django.views import View
+from django.http import HttpResponse
 from aliyunsdkecs.request.v20140526 import DescribeInstancesRequest, DescribeInstanceAutoRenewAttributeRequest, \
     DescribeInstanceMonitorDataRequest
 from aliyunsdkslb.request.v20140515 import DescribeLoadBalancersRequest
 import json
 import datetime
 from django.core.cache import cache
-from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from dwebsocket.decorators import accept_websocket, require_websocket
 from django.core.paginator import Paginator
 from django.core import serializers
-
 from rest_framework import mixins
 from rest_framework import viewsets
 from rest_framework import status
 from rest_framework.response import Response
+from rest_framework import authentication
+from rest_framework_jwt.authentication import JSONWebTokenAuthentication
 
 from .serializers import PostTaskSerializer, GetTaskSerializer
-
 from .models import AliUserAccessKey, OtherPlatforms, HostIpSearchTask
 from .utils import AliClient, ECSList, ECSDetails, isIpV4AddrLegal, SlbList
 from .tasks import SearchHostIp, SearchHostInstancename
-from user.api_session import authenticate
 from user.user_permission import HostsPermission
 
 
@@ -55,23 +52,11 @@ def GraphicsView(request):
             request.websocket.send(json.dumps(json_data["MonitorData"]["InstanceMonitorData"]))
 
 
-# API ------------------------------------------------------------------------------------------------------------------
+class HostListUserSelectView(viewsets.GenericViewSet, mixins.ListModelMixin):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
-
-class IndexBaseView(View):
-    @method_decorator(authenticate)
-    def get(self, request):
-        username = request.user.username
-
-        return JsonResponse({
-            'username': username
-        })
-
-
-class HostListUserSelect(View):
-    @method_decorator(authenticate)
     @method_decorator(HostsPermission)
-    def get(self, request):
+    def list(self, request, *args, **kwargs):
         userdata = AliUserAccessKey.objects.all()
         userdata_ = list()
         for userobj in userdata:
@@ -84,19 +69,19 @@ class HostListUserSelect(View):
             otheruser_nikename['nickname'] = otheruser.nickname
             otheruser_nikename['the_other'] = otheruser.the_other
             userdata_.append(otheruser_nikename)
-
-        return JsonResponse({
+        return Response({
             'userdata': userdata_
         })
 
 
-class EcsHostTableView(View):
-    @method_decorator(authenticate)
+class EcsHostTableView(viewsets.GenericViewSet, mixins.ListModelMixin):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
     @method_decorator(HostsPermission)
-    def get(self, request):
-        user = request.GET.get('user')
-        page_size = request.GET.get('page_size')
-        page_num = request.GET.get('page_num')
+    def list(self, request, *args, **kwargs):
+        user = request.query_params.get('user')
+        page_size = request.query_params.get('page_size')
+        page_num = request.query_params.get('page_num')
         key = user + str(page_num) + str(page_size)
         if cache.get(key) is not None:
             json_data = cache.get(key)
@@ -119,18 +104,19 @@ class EcsHostTableView(View):
         ecslistobj = ECSList(json_data, user)
         index_data_ = ecslistobj.IndexList()
 
-        return JsonResponse({
+        return Response({
             'index_data_': index_data_
         })
 
 
-class HostTableView(View):
-    @method_decorator(authenticate)
+class OtherHostTableView(viewsets.GenericViewSet, mixins.ListModelMixin):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
     @method_decorator(HostsPermission)
-    def get(self, request):
-        other_user = request.GET.get('other_user')
-        page_size = request.GET.get('page_size')
-        page_num = request.GET.get('page_num')
+    def list(self, request, *args, **kwargs):
+        other_user = request.query_params.get('other_user')
+        page_size = request.query_params.get('page_size')
+        page_num = request.query_params.get('page_num')
         otheruserdata = OtherPlatforms.objects.get(nickname=other_user)
         hosts = otheruserdata.hosts.all()
         p = Paginator(hosts, int(page_size))
@@ -140,7 +126,7 @@ class HostTableView(View):
         page_json = serializers.serialize("json", page)
         page_json = json.loads(page_json)
 
-        return JsonResponse({
+        return Response({
             'table': page_json,
             'nichname': other_user,
             'totalpage': totalpage,
@@ -148,83 +134,14 @@ class HostTableView(View):
         })
 
 
-class HostIpSearchView(View):
-    @method_decorator(authenticate)
+class SlbListView(viewsets.GenericViewSet, mixins.ListModelMixin):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
     @method_decorator(HostsPermission)
-    def post(self, request):
-        payload = json.loads(request.body)
-        if payload['sdata'].strip() != '':
-            if payload['category'] == 'AllIP':
-                is_true = isIpV4AddrLegal(payload['sdata'])
-                if is_true:
-                    ip = payload['sdata'].strip()
-                    searchobj = HostIpSearchTask(allip=ip, status=1, result='')
-                    searchobj.save()
-                    SearchHostIp.delay(ip, str(searchobj.id))
-                    return JsonResponse({
-                        'status': 'ok',
-                        'task_id': str(searchobj.id)
-                    })
-                else:
-                    return JsonResponse({
-                        'status': 'pass'
-                    })
-            elif payload['category'] == 'AllName':
-                instancename = payload['sdata'].strip()
-                searchobj = HostIpSearchTask(instancename=instancename, status=1, result='')
-                searchobj.save()
-                return JsonResponse({
-                    '1': 1
-                })
-        else:
-            return JsonResponse({
-                'status': 'pass'
-            })
-
-
-class GetHostIpSearch(View):
-    def get(self, request):
-        task_id = request.GET.get('task_id')
-        taskobj = HostIpSearchTask.objects.get(pk=task_id)
-        try:
-            results = eval(taskobj.result)
-        except Exception as e:
-            return JsonResponse({
-                'wait': 1
-            })
-        all_data = list()
-        index_data = list()
-        for result in results:
-            if result is not None:
-                if result['user_type'] == 'aliuser':
-                    if result.get('slb'):
-                        slbobj = SlbList(result)
-                        slb_json = slbobj.indexlist()
-                        slb_json['user_type'] = 'aliuser'
-                        slb_json['slb'] = 1
-                        all_data.append(slb_json)
-                    else:
-                        ecslistobj = ECSList(result, result['nickname'])
-                        index_data_ = ecslistobj.IndexList()
-                        for data in index_data_['index_data']:
-                            index_data.append(data)
-                        all_data.append({'PageNumber': 1, 'totalPages': 1, 'index_data': index_data, 'pagesize_off': True
-                                         , 'user_type': 'aliuser'})
-                if result['user_type'] == 'other_user':
-                    all_data.append(result)
-        return JsonResponse({
-            'search_data': all_data,
-            'status': taskobj.status
-        })
-
-
-class SlbListView(View):
-    @method_decorator(authenticate)
-    @method_decorator(HostsPermission)
-    def get(self, request):
-        user = request.GET.get('user')
-        page_size = request.GET.get('page_size')
-        page_num = request.GET.get('page_num')
+    def list(self, request, *args, **kwargs):
+        user = request.query_params.get('user')
+        page_size = request.query_params.get('page_size')
+        page_num = request.query_params.get('page_num')
         key = user + str(page_num) + str(page_size) + '_slb'
         if cache.get(key) is not None:
             json_data = cache.get(key)
@@ -245,22 +162,18 @@ class SlbListView(View):
                 return HttpResponse(status=404)
         slbobj = SlbList(json_data)
         slb_json = slbobj.indexlist()
-        return JsonResponse({
+        return Response({
             'slb': slb_json
         })
 
 
-class AliEcsDetailsView(View):
-    '''
-    详情页
-    参数：用户，实例id
-    模板
-    '''
-    @method_decorator(authenticate)
+class AliEcsDetailsView(viewsets.GenericViewSet, mixins.ListModelMixin):
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
+
     @method_decorator(HostsPermission)
-    def get(self, request):
-        aliuser = request.GET.get('user')
-        instanceid = request.GET.get('instanceid')
+    def list(self, request, *args, **kwargs):
+        aliuser = request.query_params.get('user')
+        instanceid = request.query_params.get('instanceid')
         ecsdata = AliUserAccessKey.objects.get(nickname=aliuser.strip())
         clientobj = AliClient(ecsdata.AccessKey_ID, ecsdata.Access_Key_Secret,
                               ecsdata.region_id)
@@ -284,7 +197,7 @@ class AliEcsDetailsView(View):
         except Exception as e:
             ecsdetails['AutoRenewEnabled'] = ''
 
-        return JsonResponse({
+        return Response({
             'ecsdetails': ecsdetails
         })
 
@@ -292,6 +205,7 @@ class AliEcsDetailsView(View):
 class AliSearchView(mixins.CreateModelMixin, viewsets.GenericViewSet):
     serializer_class = PostTaskSerializer
     queryset = HostIpSearchTask.objects.all()
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -308,6 +222,7 @@ class AliSearchView(mixins.CreateModelMixin, viewsets.GenericViewSet):
 class AliSearchGetStatusView(mixins.ListModelMixin, viewsets.GenericViewSet, mixins.RetrieveModelMixin):
     serializer_class = GetTaskSerializer
     queryset = HostIpSearchTask.objects.all()
+    authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()

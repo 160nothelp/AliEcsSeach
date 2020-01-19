@@ -7,16 +7,19 @@ import json
 from django.utils.decorators import method_decorator
 from dwebsocket.decorators import accept_websocket, require_websocket
 from datetime import datetime
+from rest_framework import mixins
+from rest_framework import viewsets
+from rest_framework import status
+from rest_framework.response import Response
 
-from .models import GtmCheckDomain
+from .serializers import PostTaskSerializer, AliRamSerializer, GetSwitchStatusSerializer
+from .models import GtmCheckDomain, AliRamLink
 from .tasks import SwitchDomain
-from user.api_session import authenticate
 from user.user_permission import GtmPermission
 from aliecs.utils import isIpV4AddrLegal
 
 
 class SwitchGtm(View):
-    @method_decorator(authenticate)
     @method_decorator(GtmPermission)
     def post(self, request):
         payload = json.loads(request.body)
@@ -39,6 +42,18 @@ class SwitchGtm(View):
         return JsonResponse({
             'status': 'complete'
         })
+
+
+class SwitchGtmView(mixins.CreateModelMixin, viewsets.GenericViewSet):
+    serializer_class = PostTaskSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        return Response({
+            'status': 'complete'
+        }, status=status.HTTP_201_CREATED)
 
 
 class GetSwitchStatus(View):
@@ -84,9 +99,53 @@ class GetSwitchStatus(View):
         })
 
 
-# class CheckDomainLine(View):
-#     @method_decorator(authenticate)
-#     @method_decorator(GtmPermission)
+class GetSwitchStatusView(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = GetSwitchStatusSerializer
+    queryset = GtmCheckDomain.objects.all()
+
+    # def list(self, request, *args, **kwargs):
+    #     queryset = self.filter_queryset(self.get_queryset())
+    #     serializer = self.get_serializer(queryset, many=True)
+    #     try:
+    #         task_id_obj = eval(serializer.data['task_id'])
+    #     except Exception as e:
+    #         return Response({
+    #             'result': 1,
+    #             'status': 'pass'
+    #         })
+    #     client = AcsClient(serializer.AccessKey_ID, serializer.Access_Key_Secret, serializer.region_id)
+    #     result = list()
+    #     for task_ids in task_id_obj:
+    #         result_ = ''
+    #         for task_id in task_ids:
+    #             request_ = DescribeBatchResultCountRequest()
+    #             request_.set_accept_format('json')
+    #             request_.set_TaskId(task_id)
+    #             response = client.do_action_with_exception(request_)
+    #             json_data = json.loads(str(response, encoding='utf-8'))
+    #             if json_data['Status'] == 1:
+    #                 result_ = '已完成'
+    #             if json_data['Status'] == 2:
+    #                 result_ = '已完成'
+    #                 result.append('有错误，错误数量：%s' % json_data.get('FailedCount'))
+    #             if json_data['Status'] == 0:
+    #                 result_ = '执行中'
+    #             if json_data['Status'] == -1:
+    #                 result_ = '已完成'
+    #                 result.append('有域名不属于阿里云的管控')
+    #
+    #         result.append(result_)
+    #     index = [i for i, a in enumerate(result) if a == '执行中']
+    #     if len(index) == 0:
+    #         status = 'all'
+    #     else:
+    #         status = 'no'
+    #     return Response({
+    #         'result': result,
+    #         'status': status
+    #     })
+
+
 @accept_websocket
 def CheckDomainLine(request):
     for message in request.websocket:
@@ -121,8 +180,9 @@ def CheckDomainLine(request):
         now = datetime.now()
         cday = now.strftime('%Y-%m-%d %H:%M:%S')
         request.websocket.send(json.dumps({'total': total, 'counter': counter, 'other': other, 'time': cday, 'null': null}))
-    # return JsonResponse({
-    #     'total': total,
-    #     'counter': counter
-    # })
+
+
+class AliRamView(mixins.ListModelMixin, viewsets.GenericViewSet):
+    serializer_class = AliRamSerializer
+    queryset = AliRamLink.objects.all()
 

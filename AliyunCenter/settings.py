@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'user',
     'ops',
+    'tools',
+    'worktickets',
     'gunicorn',
     'django_filters',
     'rest_framework',
@@ -180,7 +182,6 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework_jwt.authentication.JSONWebTokenAuthentication',
     )
 }
 
@@ -188,6 +189,7 @@ REST_FRAMEWORK = {
 import datetime
 JWT_AUTH = {
     'JWT_EXPIRATION_DELTA': datetime.timedelta(hours=2),
+    # 'JWT_REFRESH_EXPIRATION_DELTA': datetime.timedelta(hours=2),
     'JWT_AUTH_HEADER_PREFIX': 'JWT',
 }
 

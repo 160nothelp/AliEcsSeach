@@ -1,16 +1,21 @@
-from django.urls import path
+from django.urls import path, include
 from rest_framework_jwt.views import obtain_jwt_token
+from rest_framework import routers
 
 from . import views
+
+
+router = routers.DefaultRouter(trailing_slash=False)
+
+router.register(r'check', views.CheckLoginView, basename='check')
+router.register(r'index-base', views.IndexBaseView, basename='index_base')
+router.register(r'change-password', views.ChangePasswordView, basename='change_password')
 
 
 app_name = 'user'
 
 
 urlpatterns = [
-    path('login', views.LogInView.as_view(), name='login'),
-    path('login_', obtain_jwt_token, name='login'),
-    path('logout', views.LogOutView.as_view(), name='logout'),
-    path('change-password', views.ChangePasswdView.as_view(), name='change_password'),
-    path('check', views.CheckLogin.as_view(), name='check'),
+    path('login', obtain_jwt_token, name='login'),
+    path('', include(router.urls)),
 ]
