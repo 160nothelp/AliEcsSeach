@@ -13,7 +13,7 @@ class WorkTicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkTicket
         fields = (
-            'id', 'pid', 'name', 'type', 'content', 'create_user', 'action_user', 'edit_user',
+            'id', 'name', 'type', 'content', 'create_user', 'action_user', 'edit_user',
             'level', 'ticket_status', 'create_time', 'update_time')
 
 

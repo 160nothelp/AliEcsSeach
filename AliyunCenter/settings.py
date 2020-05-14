@@ -23,9 +23,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = '^e5^4ke_==y)9tu&(y^e(1nql%7sdau6i(-*m320=0(w5cor8l'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['cmdb.godeng.com']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -43,6 +43,9 @@ INSTALLED_APPS = [
     'ops',
     'tools',
     'worktickets',
+    'sso_wiki',
+    'monitor',
+    'audit',
     'gunicorn',
     'django_filters',
     'rest_framework',
@@ -57,7 +60,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'AliyunCenter.middleware.SetRemoteAddrFromForwardedFor',
-    'AliyunCenter.middleware.DisableCSRFCheck',
+    # 'AliyunCenter.middleware.DisableCSRFCheck',
 ]
 
 ROOT_URLCONF = 'AliyunCenter.urls'
@@ -95,6 +98,73 @@ DATABASES = {
         'USER': 'oms',
         'PASSWORD': '!@#$QWER000',
         'ATOMIC_REQUESTS': True,
+    }
+}
+
+# Logging setting
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+        },
+        'main': {
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+            'format': '%(asctime)s [%(module)s %(levelname)s] %(message)s',
+        },
+        'simple': {
+            'format': '%(levelname)s %(message)s'
+        },
+        'msg': {
+            'format': '%(message)s'
+        }
+    },
+    'handlers': {
+        'null': {
+            'level': 'DEBUG',
+            'class': 'logging.NullHandler',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'main'
+        },
+        'file': {
+            'encoding': 'utf8',
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'maxBytes': 1024*1024*100,
+            'backupCount': 7,
+            'formatter': 'main',
+            'filename': '/var/log/cmdb.log',
+        }
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'propagate': False,
+            'level': 'INFO',
+        },
+        'django.request': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['file'],  # 指定file handler处理器，表示只写入到文件
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'gunicorn': {
+            'handlers': ['file'],
+            'level': 'INFO',
+        },
     }
 }
 
@@ -150,6 +220,9 @@ USE_TZ = True
 STATIC_ROOT = '/opt/static/pstatic/'
 STATIC_URL = '/pstatic/'
 
+MEDIA_ROOT = os.path.join(BASE_DIR, '../upload')
+MEDIA_URL = '/upload/'
+
 STATICFILES_DIRS = (
     os.path.join(os.path.join(BASE_DIR, 'static')),
 )
@@ -171,7 +244,7 @@ CELERY_MAX_TASKS_PER_CHILD = 5
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_WORKER_REDIRECT_STDOUTS = True
 CELERY_FORCE_EXECV = True
-# CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # 修改默认用户表
 AUTH_USER_MODEL = 'user.User'
@@ -199,3 +272,8 @@ AUTHENTICATION_BACKENDS = (
     'user.views.CustomBackend',
 )
 
+
+# WIKI API
+WIKI_SIGUP_API = 'http://127.0.0.1:8081/wiki/_accounts/sigup_api/'
+WIKI_LOGIN_API = 'http://127.0.0.1:8081/wiki/_accounts/login_api/'
+WIKI_CHANG_PASSWORD_API = 'http://127.0.0.1:8081/wiki/_accounts/change_password_api/'

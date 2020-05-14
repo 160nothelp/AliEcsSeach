@@ -31,3 +31,12 @@ class Upload(models.Model):
     class Meta:
         verbose_name = u'文件上传'
         verbose_name_plural = u'文件上传'
+
+
+class FileUpload(models.Model):
+    file = models.FileField(upload_to=("./tmp"), blank=True, verbose_name=u'上传文件')
+
+    class Meta:
+        verbose_name = u'文件上传'
+        verbose_name_plural = u'文件上传'
+

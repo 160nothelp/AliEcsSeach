@@ -23,6 +23,9 @@ CELERY_ROUTES = {
     'aliecs.tasks.SearchHostInstancename': {"queue": "for_task_search", "routing_key": "for_task_search"},
     'aliecs.tasks.SetEcsCache': {"queue": "for_task_setCache", "routing_key": "for_task_setCache"},
     'ops.tasks.SwitchDomain': {"queue": "for_task_search", "routing_key": "for_task_search"},
+    'ops.tasks.tmpCytIptables': {"queue": "for_task_search", "routing_key": "for_task_search"},
+    'ops.tasks.createshadowsocket': {"queue": "for_task_search", "routing_key": "for_task_search"},
+    'ops.tasks.createforward': {"queue": "for_task_search", "routing_key": "for_task_search"},
 }
 
 

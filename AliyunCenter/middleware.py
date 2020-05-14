@@ -16,7 +16,7 @@ class SetRemoteAddrFromForwardedFor(MiddlewareMixin):
             request.META['REMOTE_ADDR'] = real_ip
 
 
-class DisableCSRFCheck(MiddlewareMixin):
-    def process_request(self, request):
-        setattr(request, '_dont_enforce_csrf_checks', True)
+# class DisableCSRFCheck(MiddlewareMixin):
+#     def process_request(self, request):
+#         setattr(request, '_dont_enforce_csrf_checks', True)
 

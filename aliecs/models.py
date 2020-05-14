@@ -1,6 +1,8 @@
 from django.db import models
 import uuid
 
+# from user.models import User
+
 
 class AliUserAccessKey(models.Model):
     nickname = models.CharField(max_length=64, unique=True, verbose_name='账号标识名称')
@@ -8,6 +10,7 @@ class AliUserAccessKey(models.Model):
     Access_Key_Secret = models.CharField(max_length=128, verbose_name='Access_KeySecret')
     region_id = models.CharField(max_length=64, verbose_name='地区ID')
     c_time = models.DateTimeField(auto_now_add=True)
+    # project_permissions = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='阿里云主机访问权限')
 
     def __str__(self):
         return self.nickname
@@ -84,5 +87,6 @@ class HostIpSearchTask(models.Model):
 class InstanceNameResult(models.Model):
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
     task = models.ForeignKey('HostIpSearchTask', related_name='results', on_delete=models.CASCADE)
+
 
 

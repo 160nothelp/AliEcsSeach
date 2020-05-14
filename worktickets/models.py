@@ -36,7 +36,7 @@ class WorkTicket(models.Model):
     }
 
     id = models.UUIDField(default=uuid.uuid4, primary_key=True)
-    pid = models.CharField(max_length=100, unique=True, verbose_name=u'工单编号')
+    # pid = models.CharField(max_length=100, unique=True, verbose_name=u'工单编号')
     name = models.CharField(max_length=100, blank=True, verbose_name=u'工单标题')
     type = models.ForeignKey('TicketType', on_delete=models.SET_NULL, null=True, blank=True, verbose_name=u'工单类型')
     content = models.TextField(verbose_name=u'工单内容')
@@ -78,7 +78,5 @@ class TicketEnclosure(models.Model):
     class Meta:
         verbose_name = u'工单附件'
         verbose_name_plural = u'工单附件'
-
-
 
 

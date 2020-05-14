@@ -24,4 +24,7 @@ urlpatterns = [
     path('api/ops/', include('ops.urls', namespace='ops')),
     path('api/workticket/', include('worktickets.urls', namespace='worktickets')),
     path('api/tools/', include('tools.urls', namespace='tools')),
+    path('api/sso-wiki/', include('sso_wiki.urls', namespace='sso_wiki')),
+    path('api/monitor/', include('monitor.urls', namespace='monitor')),
+    path('api/audit/', include('audit.urls', namespace='audit')),
 ]

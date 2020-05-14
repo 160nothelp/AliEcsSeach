@@ -11,6 +11,7 @@ from django.core import serializers
 from django.core.cache import cache
 from .utils import AliClient
 from .models import AliUserAccessKey, HostIpSearchTask, OtherPlatforms
+from user.models import User, PermissionGroup
 
 
 def ChangUserCache(allclient):
@@ -204,12 +205,24 @@ def searchSlbIp(aliuser, ip, user_type):
 
 
 @shared_task
-def SearchHostIp(ip, id):
+def SearchHostIp(ip, id, username):
     pool = Pool(processes=3)
     return_dict = list()
     users = list()
     jobs = list()
-    aliuserobj = AliUserAccessKey.objects.all()
+    username_obj = User.objects.get(username=username)
+    aliuserobj_ = username_obj.project_permissions.all()
+    # aliuserobj = AliUserAccessKey.objects.all()
+    p_list = list()
+    groupaliuserobj = PermissionGroup.objects.filter(user__username=username)
+    for groupaliuser in groupaliuserobj:
+        i = groupaliuser.project_permissions.all()
+        p_list.append(i)
+    s_aliuserobj = groupaliuserobj.none()
+    for p in p_list:
+        # groupaliuser = groupaliuserobj.project_permissions.all()
+        s_aliuserobj |= p.distinct()
+    aliuserobj = (aliuserobj_ | s_aliuserobj).distinct()
     otheruserobj = OtherPlatforms.objects.all()
     for aliuser in aliuserobj:
         user = dict()
@@ -283,12 +296,24 @@ def searchSlbInstancename(aliuser, instancename, user_type):
 
 
 @shared_task
-def SearchHostInstancename(instancename, id):
+def SearchHostInstancename(instancename, id, username):
     pool = Pool(processes=3)
     return_dict = list()
     users = list()
     jobs = list()
-    aliuserobj = AliUserAccessKey.objects.all()
+    username_obj = User.objects.get(username=username)
+    aliuserobj_ = username_obj.project_permissions.all()
+    # aliuserobj = AliUserAccessKey.objects.all()
+    p_list = list()
+    groupaliuserobj = PermissionGroup.objects.filter(user__username=username)
+    for groupaliuser in groupaliuserobj:
+        i = groupaliuser.project_permissions.all()
+        p_list.append(i)
+    s_aliuserobj = groupaliuserobj.none()
+    for p in p_list:
+        # groupaliuser = groupaliuserobj.project_permissions.all()
+        s_aliuserobj |= p.distinct()
+    aliuserobj = (aliuserobj_ | s_aliuserobj).distinct()
     otheruserobj = OtherPlatforms.objects.all()
     for aliuser in aliuserobj:
         user = dict()

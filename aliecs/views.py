@@ -20,16 +20,12 @@ from .serializers import PostTaskSerializer, GetTaskSerializer
 from .models import AliUserAccessKey, OtherPlatforms, HostIpSearchTask
 from .utils import AliClient, ECSList, ECSDetails, isIpV4AddrLegal, SlbList
 from .tasks import SearchHostIp, SearchHostInstancename
-from user.user_permission import HostsPermission
+from user.user_permission import HostsPermission, ProjectPermissions
+from audit.addlog import add_tasks_log
 
 
 @accept_websocket
 def GraphicsView(request):
-    '''
-    监控信息，websocket通道
-    :param request:
-    :return: websocket
-    '''
     if not request.is_websocket():
         print('error')
     else:
@@ -78,6 +74,7 @@ class EcsHostTableView(viewsets.GenericViewSet, mixins.ListModelMixin):
     authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
     @method_decorator(HostsPermission)
+    @method_decorator(ProjectPermissions)
     def list(self, request, *args, **kwargs):
         user = request.query_params.get('user')
         page_size = request.query_params.get('page_size')
@@ -138,6 +135,7 @@ class SlbListView(viewsets.GenericViewSet, mixins.ListModelMixin):
     authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
     @method_decorator(HostsPermission)
+    @method_decorator(ProjectPermissions)
     def list(self, request, *args, **kwargs):
         user = request.query_params.get('user')
         page_size = request.query_params.get('page_size')
@@ -207,15 +205,16 @@ class AliSearchView(mixins.CreateModelMixin, viewsets.GenericViewSet):
     queryset = HostIpSearchTask.objects.all()
     authentication_classes = (JSONWebTokenAuthentication, authentication.SessionAuthentication)
 
+    @method_decorator(add_tasks_log('主机搜索'))
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
         if request.data['category'] == 'AllIP':
-            SearchHostIp.delay(request.data['sdata'], serializer.data['id'])
+            SearchHostIp.delay(request.data['sdata'], serializer.data['id'], request.user.username)
         elif request.data['category'] == 'AllName':
-            SearchHostInstancename.delay(request.data['allname'], serializer.data['id'])
+            SearchHostInstancename.delay(request.data['allname'], serializer.data['id'], request.user.username)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
@@ -258,5 +257,4 @@ class AliSearchGetStatusView(mixins.ListModelMixin, viewsets.GenericViewSet, mix
             'search_data': all_data,
             'status': serializer.data['status']
         })
-
 

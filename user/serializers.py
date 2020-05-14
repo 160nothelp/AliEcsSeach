@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework.validators import UniqueTogetherValidator
 
 from .models import User
 
@@ -7,7 +6,9 @@ from .models import User
 class UserPermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ("hosts_permission", "gtm_permission")
+        fields = ("hosts_permission", "gtm_permission", 'cyt_iptables_permission', 'create_shadowsocket_permission',
+                  'create_forward_permission', 'wiki_permission',
+                  'worktickets_permission')
 
 
 class UserChangePasswordSerializer(serializers.Serializer):
@@ -22,5 +23,9 @@ class UserChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("新密码不一致")
 
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('username', 'id')
 
 

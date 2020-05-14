@@ -7,9 +7,10 @@ from . import views
 
 router = routers.DefaultRouter(trailing_slash=False)
 
-router.register(r'check', views.CheckLoginView, basename='check')
+router.register(r'check', views.CheckLoginViewPermissionView, basename='check')
 router.register(r'index-base', views.IndexBaseView, basename='index_base')
 router.register(r'change-password', views.ChangePasswordView, basename='change_password')
+router.register(r'users', views.UserViewSet, basename='users')
 
 
 app_name = 'user'
